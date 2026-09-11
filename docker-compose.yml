@@ -1,0 +1,72 @@
+services:
+  primary:
+    image: pgmon/postgres:18
+    container_name: pgmon-primary
+    command: ["postgres", "-c", "config_file=/etc/postgresql/primary.conf"]
+    environment:
+      POSTGRES_PASSWORD: ${PG_SUPERUSER_PASSWORD}
+      POSTGRES_DB: bench
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - /mnt/pgdata/primary:/var/lib/postgresql/data
+      - ./log/primary:/var/log/postgresql
+      - /mnt/pgmeta/archive:/var/lib/postgresql/archive
+      - /mnt/pgmeta/snapshots:/var/lib/postgresql/snapshots
+      - ./stand/conf/primary.conf:/etc/postgresql/primary.conf:ro
+    ports: ["5432:5432"]
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    cpu_shares: 4096
+    shm_size: 512m
+    networks: [stand]
+
+  replica:
+    image: pgmon/postgres:18
+    container_name: pgmon-replica
+    user: "999:999"
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command: ["postgres", "-c", "config_file=/etc/postgresql/replica.conf"]
+    volumes:
+      - /mnt/pgdata/replica:/var/lib/postgresql/data
+      - ./log/replica:/var/log/postgresql
+      - ./stand/conf/replica.conf:/etc/postgresql/replica.conf:ro
+    ports: ["5435:5432"]
+    mem_limit: 1024m
+    memswap_limit: 1024m
+    cpu_shares: 512
+    networks: [stand]
+    depends_on: [primary]
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: pgmon-pgbouncer
+    volumes:
+      - ./stand/conf/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./stand/conf/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    ports: ["6432:6432"]
+    mem_limit: 128m
+    cpu_shares: 256
+    networks: [stand]
+    depends_on: [primary]
+
+  meta:
+    image: postgres:18
+    container_name: pgmon-meta
+    command: ["postgres", "-c", "config_file=/etc/postgresql/meta.conf"]
+    environment:
+      POSTGRES_PASSWORD: ${META_PASSWORD}
+      POSTGRES_DB: pgmon_meta
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - /mnt/pgmeta/meta:/var/lib/postgresql/data
+      - ./stand/conf/meta.conf:/etc/postgresql/meta.conf:ro
+    ports: ["5433:5432"]
+    mem_limit: 1024m
+    memswap_limit: 1024m
+    cpu_shares: 512
+    networks: [stand]
+
+networks:
+  stand:
+    driver: bridge
